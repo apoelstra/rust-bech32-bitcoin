@@ -93,10 +93,7 @@ impl WitnessProgram {
         }
         let mut data: Vec<u8> = vec![self.version];
         // Convert 8-bit program into 5-bit
-        let p5 = match convert_bits(self.program.to_vec(), 8, 5, true) {
-            Ok(p) => p,
-            Err(e) => return Err(Error::Conversion(e))
-        };
+        let p5 = bech32::convert_bits(&self.program, 8, 5, true)?;
         let hrp = constants::hrp(&self.network);
         data.extend_from_slice(&p5);
         let b32 = Bech32::new(hrp.into(), data)?;
@@ -128,10 +125,7 @@ impl WitnessProgram {
         let wp = WitnessProgram {
             version: v.to_vec()[0],
             // Convert to 8-bit program and assign
-            program: match convert_bits(p5.to_vec(), 5, 8, false) {
-                Ok(p) => p,
-                Err(e) => return Err(Error::Conversion(e))
-            },
+            program: bech32::convert_bits(&p5, 5, 8, false)?,
             network: network_classified.unwrap()
         };
         match wp.validate() {
@@ -455,11 +449,11 @@ mod tests {
             ("tb1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3q0sL5k7",
                 Error::Bech32(bech32::Error::MixedCase)),
             ("tb1pw508d6qejxtdg4y5r3zarqfsj6c3",
-                Error::Conversion(BitConversionError::InvalidPadding)),
+                Error::Bech32(bech32::Error::InvalidPadding)),
             ("bc1zw508d6qejxtdg4y5r3zarvaryvqyzf3du",
-                Error::Conversion(BitConversionError::InvalidPadding)),
+                Error::Bech32(bech32::Error::InvalidPadding)),
             ("tb1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3pjxtptv",
-                Error::Conversion(BitConversionError::InvalidPadding)),
+                Error::Bech32(bech32::Error::InvalidPadding)),
             ("bc1gmk9yu",
                 Error::Bech32(bech32::Error::InvalidLength)),
         );
