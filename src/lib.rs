@@ -48,7 +48,7 @@
 //! assert_eq!(address, 
 //!     "tb1qqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesrxh6hy".to_string());
 //!
-//! let decoded = WitnessProgram::from_address(address).unwrap();
+//! let decoded = WitnessProgram::from_address(&address).unwrap();
 //! assert_eq!(decoded, witness_program);
 //! ```
 
@@ -62,6 +62,7 @@ extern crate bech32;
 use bech32::Bech32;
 
 use std::{error, fmt};
+use std::str::FromStr;
 
 pub mod constants;
 use constants::Network;
@@ -98,13 +99,10 @@ impl WitnessProgram {
         };
         let hrp = constants::hrp(&self.network);
         data.extend_from_slice(&p5);
-        let b32 = Bech32 {hrp: hrp.clone(), data: data};
-        let address = match b32.to_string() {
-            Ok(s) => s,
-            Err(e) => return Err(Error::Bech32(e))
-        };
+        let b32 = Bech32::new(hrp.into(), data)?;
+        let address = b32.to_string();
         // Ensure that the address decodes into a program properly
-        WitnessProgram::from_address(address.clone())?;
+        WitnessProgram::from_address(&address)?;
         Ok(address)
     }
 
@@ -113,20 +111,20 @@ impl WitnessProgram {
     /// Verifies that the `address` contains a known human-readable part 
     /// `hrp` and decodes as proper Bech32-encoded string. Allowed values of
     /// the human-readable part correspond to the defined types in `constants`
-    pub fn from_address(address: String) -> DecodeResult {
-        let b32 = match Bech32::from_string(address) {
+    pub fn from_address(address: &str) -> DecodeResult {
+        let b32 = match Bech32::from_str(address) {
             Ok(b) => b,
             Err(e) => return Err(Error::Bech32(e)),
         };
-        let network_classified = constants::classify(&b32.hrp);
+        let network_classified = constants::classify(b32.hrp());
         if network_classified.is_none() {
             return Err(Error::InvalidHumanReadablePart)
         }
-        if b32.data.len() == 0 || b32.data.len() > 65 {
+        if b32.data().len() == 0 || b32.data().len() > 65 {
             return Err(Error::Bech32(bech32::Error::InvalidLength))
         }
         // Get the script version and 5-bit program
-        let (v, p5) = b32.data.split_at(1);
+        let (v, p5) = b32.data().split_at(1);
         let wp = WitnessProgram {
             version: v.to_vec()[0],
             // Convert to 8-bit program and assign
@@ -250,6 +248,12 @@ pub enum Error {
     Conversion(BitConversionError),
     /// The human-readable part is invalid (must be "bc" or "tb")
     InvalidHumanReadablePart,
+}
+
+impl From<bech32::Error> for Error {
+    fn from(e: bech32::Error) -> Error {
+        Error::Bech32(e)
+    }
 }
 
 impl fmt::Display for Error {
@@ -414,7 +418,7 @@ mod tests {
         ];
         for p in pairs {
             let (address, scriptpubkey) = p;
-            let dec_result = WitnessProgram::from_address(address.to_string());
+            let dec_result = WitnessProgram::from_address(&address.to_string());
             assert!(dec_result.is_ok());
 
             let prog = dec_result.unwrap();
@@ -461,7 +465,7 @@ mod tests {
         );
         for p in pairs {
             let (address, desired_error) = p;
-            let dec_result = WitnessProgram::from_address(address.to_string());
+            let dec_result = WitnessProgram::from_address(&address.to_string());
             println!("{:?}", address.to_string());
             if dec_result.is_ok() {
                 println!("{:?}", dec_result.unwrap());
