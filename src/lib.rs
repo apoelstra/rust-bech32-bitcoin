@@ -109,10 +109,7 @@ impl WitnessProgram {
     /// `hrp` and decodes as proper Bech32-encoded string. Allowed values of
     /// the human-readable part correspond to the defined types in `constants`
     pub fn from_address(address: &str) -> DecodeResult {
-        let b32 = match Bech32::from_str(address) {
-            Ok(b) => b,
-            Err(e) => return Err(Error::Bech32(e)),
-        };
+        let b32 = Bech32::from_str(address)?;
         let network_classified = constants::classify(b32.hrp());
         if network_classified.is_none() {
             return Err(Error::InvalidHumanReadablePart)
@@ -128,10 +125,8 @@ impl WitnessProgram {
             program: bech32::convert_bits(&p5, 5, 8, false)?,
             network: network_classified.unwrap()
         };
-        match wp.validate() {
-            Ok(_) => Ok(wp),
-            Err(e) => Err(Error::WitnessProgram(e))
-        }
+        wp.validate()?;
+        Ok(wp)
     }
 
     /// Converts a `WitnessProgram` to a script public key
@@ -207,6 +202,12 @@ pub enum Error {
 impl From<bech32::Error> for Error {
     fn from(e: bech32::Error) -> Error {
         Error::Bech32(e)
+    }
+}
+
+impl From<WitnessProgramError> for Error {
+    fn from(e: WitnessProgramError) -> Error {
+        Error::WitnessProgram(e)
     }
 }
 
