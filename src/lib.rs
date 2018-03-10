@@ -193,44 +193,6 @@ impl WitnessProgram {
     }
 }
 
-type ConvertResult = Result<Vec<u8>, BitConversionError>;
-
-/// Convert between bit sizes
-///
-/// # Panics
-/// Function will panic if attempting to convert `from` or `to` a bit size that
-/// is larger than 8 bits.
-fn convert_bits(data: Vec<u8>, from: u32, to: u32, pad: bool) -> ConvertResult {
-    if from > 8 || to > 8 {
-        panic!("convert_bits `from` and `to` parameters greater than 8");
-    }
-    let mut acc: u32 = 0;
-    let mut bits: u32 = 0;
-    let mut ret: Vec<u8> = Vec::new();
-    let maxv: u32 = (1<<to) - 1;
-    for value in data {
-        let v: u32 = value as u32;
-        if (v >> from) != 0 {
-            // Input value exceeds `from` bit size
-            return Err(BitConversionError::InvalidInputValue(v as u8))
-        }
-        acc = (acc << from) | v;
-        bits += from;
-        while bits >= to {
-            bits -= to;
-            ret.push(((acc >> bits) & maxv) as u8);
-        }
-    }
-    if pad {
-        if bits > 0 {
-            ret.push(((acc << (to - bits)) & maxv) as u8);
-        }
-    } else if bits >= from || ((acc << (to - bits)) & maxv) != 0 {
-        return Err(BitConversionError::InvalidPadding)
-    }
-    Ok(ret)
-}
-
 /// Error types while encoding and decoding SegWit addresses
 #[derive(PartialEq, Debug)]
 pub enum Error {
@@ -238,8 +200,6 @@ pub enum Error {
     Bech32(bech32::Error),
     /// Some witness program error
     WitnessProgram(WitnessProgramError),
-    /// Some 5-bit <-> 8-bit conversion error
-    Conversion(BitConversionError),
     /// The human-readable part is invalid (must be "bc" or "tb")
     InvalidHumanReadablePart,
 }
@@ -255,7 +215,6 @@ impl fmt::Display for Error {
         match *self {
             Error::Bech32(ref e) => write!(f, "{}", e),
             Error::WitnessProgram(ref e) => write!(f, "{}", e),
-            Error::Conversion(ref e) => write!(f, "{}", e),
             Error::InvalidHumanReadablePart => write!(f, "invalid human-readable part"),
         }
     }
@@ -266,7 +225,6 @@ impl error::Error for Error {
         match *self {
             Error::Bech32(_) => "Bech32 error",
             Error::WitnessProgram(_) => "witness program error",
-            Error::Conversion(_) => "bit conversion error",
             Error::InvalidHumanReadablePart => "invalid human-readable part",
         }
     }
@@ -275,7 +233,6 @@ impl error::Error for Error {
         match *self {
             Error::Bech32(ref e) => Some(e),
             Error::WitnessProgram(ref e) => Some(e),
-            Error::Conversion(ref e) => Some(e),
             _ => None,
         }
     }
@@ -324,33 +281,6 @@ impl error::Error for WitnessProgramError {
             WitnessProgramError::InvalidLength => "invalid length",
             WitnessProgramError::InvalidVersionLength => "program length incompatible with version",
             WitnessProgramError::InvalidScriptVersion => "invalid script version"
-        }
-    }
-}
-
-/// Error types during bit conversion
-#[derive(PartialEq, Debug)]
-pub enum BitConversionError {
-    /// Input value exceeds "from bits" size
-    InvalidInputValue(u8),
-    /// Invalid padding values in data
-    InvalidPadding,
-}
-
-impl fmt::Display for BitConversionError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            BitConversionError::InvalidInputValue(b) => write!(f, "invalid input value ({})", b),
-            BitConversionError::InvalidPadding => write!(f, "invalid padding"),
-        }
-    }
-}
-
-impl error::Error for BitConversionError {
-    fn description(&self) -> &str {
-        match *self {
-            BitConversionError::InvalidInputValue(_) => "invalid input value",
-            BitConversionError::InvalidPadding => "invalid padding",
         }
     }
 }
